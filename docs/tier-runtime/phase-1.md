@@ -16,7 +16,7 @@ boundaries only.
 ## Architecture boundary
 
 ```text
-llama-server / llama-bench / llama-perplexity
+llama-server / llama-bench / llama-perplexity / validation llama-cli
                 |
                 v
           llama-common
@@ -107,12 +107,17 @@ The wrapper:
 1. runs the Rust fmt/clippy/test gate;
 2. builds `libggml_shim.a` for the selected macOS architecture;
 3. runs the normal ToshLLM llama.cpp build with patches 0001–0010;
-4. applies `0011-rust-tier-shim.patch` to that exact patched source tree;
-5. points the existing CMake build at the Rust static library and header;
-6. relinks the three normal engine binaries;
-7. verifies the Rust ABI symbol exists in each Mach-O binary;
-8. starts `llama-bench --help` with `TOSH_TIER_DISABLE=1` and requires an inert
-   runtime startup diagnostic.
+4. builds a validation-only `llama-cli` and saves the unmodified binaries under
+   `build-static/bin/tier-baseline/`;
+5. applies `0011-rust-tier-shim.patch` to that exact patched source tree;
+6. points the existing CMake build at the Rust static library and header;
+7. relinks `llama-server`, `llama-bench`, `llama-perplexity`, and validation
+   `llama-cli`;
+8. verifies the Rust ABI symbol exists in each Mach-O binary;
+9. starts `llama-server --help` with `TOSH_TIER_DISABLE=1` and requires an inert
+   runtime startup diagnostic. `llama-server` calls `common_init()` before
+   argument parsing, so this exercises the C++ → Rust lifecycle without a model
+   or GPU allocation.
 
 This keeps the experimental seam removable with one patch and avoids making
 Rust a prerequisite for the ordinary ToshLLM build before the link experiment
@@ -120,16 +125,24 @@ is validated on target hardware.
 
 ## cbindgen
 
-The checked-in C ABI has a matching `cbindgen.toml`. After an ABI change,
-regenerate it with:
+The checked-in C ABI has a matching `cbindgen.toml`. To inspect generated output
+after an ABI change:
 
 ```bash
 cargo install cbindgen --locked   # once
 zsh scripts/tier-generate-header.sh
+
+diff -u \
+  tosh-tier/include/tosh_tier.h \
+  tosh-tier/include/tosh_tier.generated.h
 ```
 
-ABI layout is also asserted independently in Rust tests and C++ `static_assert`s
-so a generator/configuration change cannot silently alter the shared struct.
+The generator deliberately writes a separate ignored comparison file by
+default. The checked-in header retains the C++ `static_assert`s and is only
+replaced after review.
+
+ABI layout is asserted independently in Rust tests and C++ `static_assert`s so
+a generator/configuration change cannot silently alter the shared struct.
 
 ## Phase 1 validation gates
 
@@ -140,11 +153,25 @@ zsh scripts/tier-check-rust.sh
 zsh scripts/tier-build-engine.sh
 ```
 
-Then compare a deterministic static baseline against a linked-but-disabled run.
+Then compare the saved unmodified binaries against the linked-but-disabled
+binaries:
+
+```bash
+MODEL_PATH=/absolute/path/model.gguf \
+N_CPU_MOE=<known-good-static-value> \
+zsh scripts/tier-phase1-ab.sh
+```
+
+`tier-phase1-ab.sh` runs the same prompt, seed, temperature, model and static
+MoE split through both `llama-cli` binaries and byte-compares their generated
+stdout. It also captures three-repetition `pp512` / `tg128` benchmark output for
+the performance gate. Local A/B artifacts are written beneath
+`docs/tier-runtime/phase1-captures/` and ignored by git.
 
 ### Correctness gate
 
-- identical deterministic output tokens for the same model/prompt/seed;
+- byte-identical deterministic model output for the same model/prompt/seed;
+- linked run confirms `TOSH_TIER_DISABLE=1` in its startup diagnostic;
 - no crash during startup or shutdown;
 - no ABI warnings;
 - no runtime handle leak visible in repeated process launches.
@@ -165,7 +192,10 @@ All must pass:
 - llama-server link
 - llama-bench link
 - llama-perplexity link
+- validation llama-cli link
+- Mach-O symbol check for the Rust ABI
 - startup smoke with `TOSH_TIER_DISABLE=1`
+- deterministic A/B output equality
 
 ## Explicitly not implemented
 
