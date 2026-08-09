@@ -19,14 +19,16 @@ if ! command -v cargo >/dev/null 2>&1; then
     exit 1
 fi
 
-if command -v rustup >/dev/null 2>&1 && ! rustup target list --installed | grep -qx "$RUST_TARGET"; then
-    echo "Rust target $RUST_TARGET is not installed." >&2
-    echo "Install it with: rustup target add $RUST_TARGET" >&2
-    exit 1
+if command -v rustup >/dev/null 2>&1; then
+    if ! (cd "$ROOT/tosh-tier" && rustup target list --installed) | grep -qx "$RUST_TARGET"; then
+        echo "Rust target $RUST_TARGET is not installed for the selected toolchain." >&2
+        echo "Install it with: (cd tosh-tier && rustup target add $RUST_TARGET)" >&2
+        exit 1
+    fi
 fi
 
 echo "== Phase 1: validate Rust workspace =="
-"$ROOT/scripts/tier-check-rust.sh"
+zsh "$ROOT/scripts/tier-check-rust.sh"
 
 echo "== Phase 1: build Rust static library for $RUST_TARGET =="
 (
