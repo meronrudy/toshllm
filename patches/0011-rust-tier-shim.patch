@@ -1,0 +1,108 @@
+diff --git a/common/CMakeLists.txt b/common/CMakeLists.txt
+--- a/common/CMakeLists.txt
++++ b/common/CMakeLists.txt
+@@ -105,6 +105,17 @@ target_compile_features   (${TARGET} PUBLIC cxx_std_17)
+ target_link_libraries(${TARGET} PUBLIC  llama-common-base)
+ target_link_libraries(${TARGET} PRIVATE cpp-httplib)
+ 
++# Optional ToshLLM Rust tier runtime. This is deliberately an imported static
++# library so the production engine build stays unchanged unless the caller
++# supplies both paths. The Rust side owns policy only; ggml/Metal remains the
++# executor.
++if (TOSH_TIER_LIB AND TOSH_TIER_INCLUDE_DIR)
++    add_library(tosh-tier-runtime STATIC IMPORTED GLOBAL)
++    set_target_properties(tosh-tier-runtime PROPERTIES IMPORTED_LOCATION "${TOSH_TIER_LIB}")
++    target_include_directories(${TARGET} PRIVATE "${TOSH_TIER_INCLUDE_DIR}")
++    target_compile_definitions(${TARGET} PRIVATE TOSH_TIER_LINKED=1)
++    target_link_libraries(${TARGET} PUBLIC tosh-tier-runtime)
++endif()
++
+ if (LLAMA_LLGUIDANCE)
+     include(ExternalProject)
+     set(LLGUIDANCE_SRC ${CMAKE_BINARY_DIR}/llguidance/source)
+diff --git a/common/common.cpp b/common/common.cpp
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -8,6 +8,10 @@
+ #include "speculative.h"
+ #include "unicode.h"
+ 
++#ifdef TOSH_TIER_LINKED
++#include "tosh_tier.h"
++#endif
++
+ #include <algorithm>
+ #include <cinttypes>
+ #include <climits>
+@@ -15,7 +19,9 @@
+ #include <cmath>
+ #include <chrono>
+ #include <cstdarg>
++#include <cstdio>
++#include <cstdlib>
+ #include <cstring>
+ #include <ctime>
+ #include <filesystem>
+@@ -383,6 +389,48 @@ bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_MAX_N_THREADS]) {
+     return true;
+ }
+ 
++#ifdef TOSH_TIER_LINKED
++static ToshTierRuntime * g_tosh_tier_runtime = nullptr;
++
++static void common_tosh_tier_shutdown() {
++    if (g_tosh_tier_runtime != nullptr) {
++        tosh_tier_runtime_destroy(g_tosh_tier_runtime);
++        g_tosh_tier_runtime = nullptr;
++    }
++}
++
++static void common_tosh_tier_init() {
++    if (g_tosh_tier_runtime != nullptr) {
++        return;
++    }
++
++    const uint32_t rust_abi = tosh_tier_abi_version();
++    if (rust_abi != TOSH_TIER_ABI_VERSION) {
++        fprintf(stderr, "tosh-tier: ABI mismatch: engine=%u rust=%u; runtime disabled\n",
++                TOSH_TIER_ABI_VERSION, rust_abi);
++        return;
++    }
++
++    ToshTierConfigV1 config = {};
++    config.abi_version = TOSH_TIER_ABI_VERSION;
++    config.struct_size = sizeof(config);
++
++    const int32_t status = tosh_tier_runtime_create(&config, &g_tosh_tier_runtime);
++    if (status != TOSH_TIER_STATUS_OK || g_tosh_tier_runtime == nullptr) {
++        fprintf(stderr, "tosh-tier: runtime create failed: status=%d; continuing without tier runtime\n",
++                status);
++        g_tosh_tier_runtime = nullptr;
++        return;
++    }
++
++    std::atexit(common_tosh_tier_shutdown);
++
++    if (std::getenv("TOSH_TIER_LOG") != nullptr) {
++        fprintf(stderr, "tosh-tier: linked ABI %u version %s enabled=%s\n",
++                rust_abi,
++                tosh_tier_version_string(),
++                tosh_tier_runtime_is_enabled(g_tosh_tier_runtime) ? "yes" : "no");
++    }
++}
++#endif
++
+ void common_init() {
+ #if defined(_WIN32)
+     SetConsoleOutputCP(CP_UTF8);
+@@ -393,6 +441,10 @@ void common_init() {
+     common_log_set_timestamps(common_log_main(), true);
+ 
+     llama_log_set(common_log_default_callback, NULL);
++
++#ifdef TOSH_TIER_LINKED
++    common_tosh_tier_init();
++#endif
+ }
+ 
+ // Stamped by build-engines.sh from VERSION. Passed unquoted so the value needs no
