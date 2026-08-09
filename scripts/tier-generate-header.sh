@@ -3,7 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-OUT="${1:-$ROOT/tosh-tier/include/tosh_tier.h}"
+OUT="${1:-$ROOT/tosh-tier/include/tosh_tier.generated.h}"
+CANONICAL="$ROOT/tosh-tier/include/tosh_tier.h"
 
 if ! command -v cbindgen >/dev/null 2>&1; then
     echo "cbindgen is not installed." >&2
@@ -18,3 +19,6 @@ cbindgen \
     --output "$OUT"
 
 echo "generated $OUT"
+if [ "$OUT" != "$CANONICAL" ]; then
+    echo "review with: diff -u $CANONICAL $OUT"
+fi
