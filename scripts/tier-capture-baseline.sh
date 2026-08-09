@@ -63,12 +63,20 @@ if [ -n "$MODEL_PATH" ]; then
         exit 1
     fi
 
+    bench_args=(-m "$MODEL_PATH" -p "$BENCH_PP" -n "$BENCH_TG")
+    if [[ "$N_CPU_MOE" -gt 0 ]]; then
+        bench_args+=(--n-cpu-moe "$N_CPU_MOE")
+    fi
+
     echo "Running baseline llama-bench..."
+    printf 'args=' >> "$OUT/run-metadata.txt"
+    printf '%q ' "${bench_args[@]}" >> "$OUT/run-metadata.txt"
+    printf '\n' >> "$OUT/run-metadata.txt"
+
     # Keep the raw canonical output; Benchmark.swift remains the source of truth
     # for ToshLLM's richer saved result format. This capture is intentionally
     # non-invasive and does not alter the app benchmark path.
-    "$BENCH_BINARY" -m "$MODEL_PATH" -p "$BENCH_PP" -n "$BENCH_TG" \
-        ${N_CPU_MOE:+--n-cpu-moe "$N_CPU_MOE"} 2>&1 | tee "$OUT/llama-bench.txt"
+    "$BENCH_BINARY" "${bench_args[@]}" 2>&1 | tee "$OUT/llama-bench.txt"
 else
     cat > "$OUT/README.txt" <<'EOF'
 Hardware and engine metadata captured. No benchmark was run because MODEL_PATH
