@@ -71,7 +71,7 @@ diff --git a/common/common.cpp b/common/common.cpp
 +
 +    ToshTierConfigV1 config = {};
 +    config.abi_version = TOSH_TIER_ABI_VERSION;
-+    config.struct_size = sizeof(config);
++    config.struct_size = static_cast<uint32_t>(sizeof(config));
 +
 +    const int32_t status = tosh_tier_runtime_create(&config, &g_tosh_tier_runtime);
 +    if (status != TOSH_TIER_STATUS_OK || g_tosh_tier_runtime == nullptr) {
