@@ -74,7 +74,7 @@ pub unsafe extern "C" fn tosh_tier_runtime_create(
     if config.abi_version != TOSH_TIER_ABI_VERSION {
         return TOSH_TIER_STATUS_ABI_MISMATCH;
     }
-    if usize::try_from(config.struct_size).ok() != Some(std::mem::size_of::<ToshTierConfigV1>()) {
+    if usize::from(config.struct_size) != std::mem::size_of::<ToshTierConfigV1>() {
         return TOSH_TIER_STATUS_STRUCT_SIZE_MISMATCH;
     }
 
