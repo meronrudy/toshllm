@@ -1,0 +1,26 @@
+language = "C"
+include_guard = "TOSH_TIER_H"
+pragma_once = false
+usize_is_size_t = true
+documentation = true
+
+sys_includes = ["stdbool.h", "stddef.h", "stdint.h"]
+
+[parse]
+parse_deps = false
+
+[export]
+include = [
+  "TOSH_TIER_ABI_VERSION",
+  "TOSH_TIER_STATUS_OK",
+  "TOSH_TIER_STATUS_INVALID_ARGUMENT",
+  "TOSH_TIER_STATUS_ABI_MISMATCH",
+  "TOSH_TIER_STATUS_STRUCT_SIZE_MISMATCH",
+  "ToshTierConfigV1",
+  "ToshTierRuntime",
+  "tosh_tier_abi_version",
+  "tosh_tier_version_string",
+  "tosh_tier_runtime_create",
+  "tosh_tier_runtime_is_enabled",
+  "tosh_tier_runtime_destroy",
+]
