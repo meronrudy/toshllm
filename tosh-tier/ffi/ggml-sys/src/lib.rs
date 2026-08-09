@@ -1,12 +1,11 @@
 #![allow(unsafe_code)]
+#![allow(clippy::must_use_candidate)]
 
-//! Minimal raw bindings for the patched ggml Metal transfer surface.
+//! Minimal raw bindings for the patched ggml/Metal transfer surface.
 //!
-//! These declarations mirror the symbols already present after ToshLLM patches
-//! `0001-metal-amd-staging-transfers.patch` and
-//! `0009-metal-multigpu-dispatch.patch`. Phase 1 does not call them yet; the
-//! declarations establish the narrow FFI boundary that later transfer-policy
-//! code will use.
+//! The crate intentionally exposes only symbols already provided by ToshLLM's
+//! patched engine plus opaque handles reserved for the later buffer-type seam.
+//! Policy crates never import raw ggml pointers directly.
 
 use std::ffi::c_void;
 
@@ -20,7 +19,13 @@ pub struct GgmlTensorOpaque {
     _private: [u8; 0],
 }
 
+#[repr(C)]
+pub struct GgmlBackendBufferTypeOpaque {
+    _private: [u8; 0],
+}
+
 pub type GgmlMetal = *mut GgmlMetalOpaque;
+pub type GgmlBackendBufferType = *mut GgmlBackendBufferTypeOpaque;
 
 extern "C" {
     pub fn ggml_metal_synchronize(ctx: GgmlMetal);

@@ -6,6 +6,8 @@ members = [
   "crates/transfer-sched",
   "crates/ggml-shim",
   "crates/trace",
+  "crates/host-tier",
+  "crates/policy-sim",
   "ffi/ggml-sys",
 ]
 resolver = "2"
@@ -21,3 +23,4 @@ unused_must_use = "deny"
 
 [workspace.lints.clippy]
 all = "warn"
+pedantic = "warn"
