@@ -5,6 +5,11 @@ use std::ptr;
 
 /// Stable C ABI version for the experimental ToshLLM tier runtime.
 pub const TOSH_TIER_ABI_VERSION: u32 = 1;
+pub const TOSH_TIER_STATUS_OK: i32 = 0;
+pub const TOSH_TIER_STATUS_INVALID_ARGUMENT: i32 = 1;
+pub const TOSH_TIER_STATUS_ABI_MISMATCH: i32 = 2;
+pub const TOSH_TIER_STATUS_STRUCT_SIZE_MISMATCH: i32 = 3;
+
 const TOSH_TIER_VERSION: &[u8] = b"0.1.0-phase1\0";
 
 /// Versioned configuration passed across the C ABI.
@@ -25,11 +30,6 @@ pub struct ToshTierConfigV1 {
 pub struct ToshTierRuntime {
     enabled: bool,
 }
-
-const STATUS_OK: i32 = 0;
-const STATUS_INVALID_ARGUMENT: i32 = 1;
-const STATUS_ABI_MISMATCH: i32 = 2;
-const STATUS_STRUCT_SIZE_MISMATCH: i32 = 3;
 
 fn disabled_by_environment() -> bool {
     std::env::var("TOSH_TIER_DISABLE").is_ok_and(|value| {
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn tosh_tier_runtime_create(
     out_runtime: *mut *mut ToshTierRuntime,
 ) -> i32 {
     if config.is_null() || out_runtime.is_null() {
-        return STATUS_INVALID_ARGUMENT;
+        return TOSH_TIER_STATUS_INVALID_ARGUMENT;
     }
 
     // Make failure paths deterministic for C/C++ callers.
@@ -72,17 +72,17 @@ pub unsafe extern "C" fn tosh_tier_runtime_create(
 
     let config = unsafe { &*config };
     if config.abi_version != TOSH_TIER_ABI_VERSION {
-        return STATUS_ABI_MISMATCH;
+        return TOSH_TIER_STATUS_ABI_MISMATCH;
     }
     if usize::try_from(config.struct_size).ok() != Some(std::mem::size_of::<ToshTierConfigV1>()) {
-        return STATUS_STRUCT_SIZE_MISMATCH;
+        return TOSH_TIER_STATUS_STRUCT_SIZE_MISMATCH;
     }
 
     let runtime = Box::new(ToshTierRuntime {
         enabled: !disabled_by_environment(),
     });
     unsafe { ptr::write(out_runtime, Box::into_raw(runtime)) };
-    STATUS_OK
+    TOSH_TIER_STATUS_OK
 }
 
 /// Returns whether the runtime is enabled. A null handle is treated as disabled.
@@ -137,7 +137,7 @@ mod tests {
         let config = valid_config();
         let mut runtime = ptr::null_mut();
         let status = unsafe { tosh_tier_runtime_create(&config, &mut runtime) };
-        assert_eq!(status, STATUS_OK);
+        assert_eq!(status, TOSH_TIER_STATUS_OK);
         assert!(!runtime.is_null());
         unsafe { tosh_tier_runtime_destroy(runtime) };
     }
@@ -148,7 +148,7 @@ mod tests {
         config.abi_version += 1;
         let mut runtime = ptr::null_mut();
         let status = unsafe { tosh_tier_runtime_create(&config, &mut runtime) };
-        assert_eq!(status, STATUS_ABI_MISMATCH);
+        assert_eq!(status, TOSH_TIER_STATUS_ABI_MISMATCH);
         assert!(runtime.is_null());
     }
 
@@ -158,7 +158,7 @@ mod tests {
         config.struct_size = 0;
         let mut runtime = ptr::null_mut();
         let status = unsafe { tosh_tier_runtime_create(&config, &mut runtime) };
-        assert_eq!(status, STATUS_STRUCT_SIZE_MISMATCH);
+        assert_eq!(status, TOSH_TIER_STATUS_STRUCT_SIZE_MISMATCH);
         assert!(runtime.is_null());
     }
 }
