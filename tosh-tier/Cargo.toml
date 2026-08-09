@@ -1,0 +1,24 @@
+[workspace]
+members = [
+  "crates/tier-core",
+  "crates/expert-cache",
+  "crates/kv-tier",
+  "crates/transfer-sched",
+  "crates/ggml-shim",
+  "crates/trace",
+  "ffi/ggml-sys",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0-or-later"
+rust-version = "1.80"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
