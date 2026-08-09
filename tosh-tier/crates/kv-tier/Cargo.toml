@@ -1,0 +1,12 @@
+[package]
+name = "kv-tier"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tier-core = { path = "../tier-core" }
+
+[lints]
+workspace = true
